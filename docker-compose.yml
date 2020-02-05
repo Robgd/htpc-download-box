@@ -1,45 +1,51 @@
-version: '3.4'
+version: '3.2'
 services:
-
   vpn:
     container_name: vpn
     image: dperson/openvpn-client:latest
     cap_add:
-      - net_admin # required to modify network interfaces
+      - NET_ADMIN # required to modify network interfaces
+    environment:
+      - PUID=0 # default user id, for downloaded files access rights
+      - GROUPID=0 # default group id, for downloaded files access rights
     restart: unless-stopped
     volumes:
       - /dev/net/tun:/dev/net/tun # tun device
-      - ${HOME}/.vpn:/vpn # OpenVPN configuration
+      - /volume1/docker/htpc-download-box/.vpn:/vpn # OpenVPN configuration
     ports:
       - 8112:8112 # port for deluge web UI to be reachable from local network
-    command: '-r 192.168.1.0/24' # route local network traffic
+      - 1194:1194
+      - 1198:1998
+    command: '-r 172.19.0.0/16' # route local network traffic
+    dns: 8.8.4.4
 
   deluge:
     container_name: deluge
     image: linuxserver/deluge:latest
     restart: always
     network_mode: service:vpn # run on the vpn network
+    #network_mode: host
     environment:
-      - PUID=1000 # default user id, for downloaded files access rights
-      - PGID=1000 # default group id, for downloaded files access rights
+      - PUID=0 # default user id, for downloaded files access rights
+      - PGID=0 # default group id, for downloaded files access rights
       - TZ=Europe/Paris # timezone
     volumes:
-      - /media/${USER}/data1/downloads/ongoing:/downloads # download folder
-      - ${HOME}/.config/deluge:/config # config files
+      - /volume1/downloads/ongoing:/downloads # download folder
+      - /volume1/docker/htpc-download-box/.config/deluge:/config # config files
 
   jackett:
     container_name: jackett
     image: linuxserver/jackett:latest
     restart: unless-stopped
-    network_mode: host
+    network_mode: host # option only available on linux
     environment:
-      - PUID=1000 # default user id, for downloaded files access rights
-      - PGID=1000 # default group id, for downloaded files access rights
+      - PUID=0 # default user id, for downloaded files access rights
+      - PGID=0 # default group id, for downloaded files access rights
       - TZ=Europe/Paris # timezone
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - /media/${USER}/data1/downloads/ongoing/torrent-blackhole:/downloads # place where to put .torrent files
-      - ${HOME}/.config/jackett:/config # config files
+      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
+      - /volume1/downloads/ongoing/torrent-blackhole:/downloads # place where to put .torrent files
+      - /volume1/docker/htpc-download-box/.config/jackett:/config # config files
 
   nzbget:
     container_name: nzbget
@@ -47,42 +53,43 @@ services:
     restart: unless-stopped
     network_mode: host
     environment:
-      - PUID=1000 # default user id, for downloaded files access rights
-      - PGID=1000 # default group id, for downloaded files access rights
+      - PUID=0 # default user id, for downloaded files access rights
+      - PGID=0 # default group id, for downloaded files access rights
       - TZ=Europe/Paris # timezone
     volumes:
-      - /media/${USER}/data1/downloads/ongoing:/downloads # download folder
-      - ${HOME}/.config/nzbget:/config # config files
+      - /volume1/downloads/ongoing:/downloads # download folder
+      - /volume1/docker/htpc-download-box/.config/nzbget:/config # config files
 
   sonarr:
     container_name: sonarr
     image: linuxserver/sonarr:latest
     restart: unless-stopped
-    network_mode: host
+    network_mode: host # option only available on linux
     environment:
-      - PUID=1000 # default user id, for downloaded files access rights
-      - PGID=1000 # default group id, for downloaded files access rights
+      - PUID=0 # default user id, for downloaded files access rights
+      - PGID=0 # default group id, for downloaded files access rights
       - TZ=Europe/Paris # timezone
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ${HOME}/.config/sonarr:/config # config files
-      - /media/${USER}/data1/downloads/series:/tv # tv shows folder
-      - /media/${USER}/data1/downloads/ongoing:/downloads # download folder
+      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
+      - /volume1/docker/htpc-download-box/.config/sonarr:/config # config files
+      - /volume1/video/tv-show:/tv # tv shows folder
+      - /volume1/downloads/ongoing:/downloads # download folder
+
 
   radarr:
     container_name: radarr
     image: linuxserver/radarr:latest
     restart: unless-stopped
-    network_mode: host
+    network_mode: host # option only available on linux
     environment:
-      - PUID=1000 # default user id, for downloaded files access rights
-      - PGID=1000 # default group id, for downloaded files access rights
+      - PUID=0 # default user id, for downloaded files access rights
+      - PGID=0 # default group id, for downloaded files access rights
       - TZ=Europe/Paris # timezone
     volumes:
-      - /etc/localtime:/etc/localtime:ro
-      - ${HOME}/.config/radarr:/config # config files
-      - /media/${USER}/data1/downloads/movies:/movies # movies folder
-      - /media/${USER}/data1/downloads/ongoing:/downloads # download folder
+      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
+      - /volume1/docker/htpc-download-box/.config/radarr:/config # config files
+      - /volume1/video/movies:/movies # movies folder
+      - /volume1/downloads/ongoing:/downloads # download folder
 
   plex-server:
     container_name: plex-server
@@ -90,8 +97,9 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Europe/Paris # timezone
-    network_mode: host
+    network_mode: host # option only available on linux
     volumes:
-      - ${HOME}/.plex/db:/config # plex database
-      - ${HOME}/.plex/transcode:/transcode # temp transcoded files
-      - /media/${USER}/data1/downloads:/data # media library
+      - /volume1/docker/htpc-download-box/.plex/db:/config # plex database
+      - /volume1/docker/htpc-download-box/.plex/transcode:/transcode # temp transcoded files
+      - /volume1/video:/media # media library
+      - /volume1/photo:/photo
