@@ -36,6 +36,7 @@ services:
   jackett:
     container_name: jackett
     image: linuxserver/jackett:latest
+    #image: sebclem/jackett
     restart: unless-stopped
     network_mode: host # option only available on linux
     environment:
@@ -46,6 +47,14 @@ services:
       - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
       - /volume1/downloads/ongoing/torrent-blackhole:/downloads # place where to put .torrent files
       - /volume1/docker/htpc-download-box/.config/jackett:/config # config files
+
+  flaresolver:
+    container_name: flaresolver
+    build: ./CloudProxy
+    ports:
+      - 8191:8191
+    restart: unless-stopped
+    #network_mode: host
 
   nzbget:
     container_name: nzbget
