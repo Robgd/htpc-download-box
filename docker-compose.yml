@@ -13,13 +13,12 @@ services:
       options:
         max-file: "5"
         max-size: "10m"
-    networks:
-      - internal
+    network_mode: host
     environment:
       - TZ=${TZ}
       - PUID=${PUID}
       - PGID=${PGID}
-      - WATCHTOWER_NOTIFICATIONS=email
+      #- WATCHTOWER_NOTIFICATIONS=email
       - WATCHTOWER_NOTIFICATION_EMAIL_FROM=${SMTP_FROM}
       - WATCHTOWER_NOTIFICATION_EMAIL_TO=${WATCHTOWER_EMAIL}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER=${SMTP_SERVER}
@@ -27,9 +26,9 @@ services:
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_USER=${SMTP_USER}
       - WATCHTOWER_NOTIFICATION_EMAIL_SERVER_PASSWORD=${SMTP_PASS}
     volumes:
-      - "/volume1/docker/htpc-download-box/watchtower/var/run/docker.sock:/var/run/docker.sock"
-      - "/volume1/docker/htpc-download-box/watchtower/etc/ssl/certs:/etc/ssl/certs"
-    command: --schedule @midnight --cleanup
+      - "/var/run/docker.sock:/var/run/docker.sock"
+      - "/etc/ssl/certs:/etc/ssl/certs"
+    command: --schedule "0 0 6 * * ?" --cleanup
 
   vpn:
     container_name: vpn
@@ -42,7 +41,7 @@ services:
     restart: unless-stopped
     volumes:
       - /dev/net/tun:/dev/net/tun # tun device
-      - /volume1/docker/htpc-download-box/.vpn:/vpn # OpenVPN configuration
+      - ${DOCKERCONFDIR}/vpn:/vpn # OpenVPN configuration
     ports:
       - 8112:8112 # port for deluge web UI to be reachable from local network
       - 1194:1194
@@ -55,37 +54,42 @@ services:
     image: linuxserver/deluge:latest
     restart: always
     network_mode: service:vpn # run on the vpn network
-    #network_mode: host
+    depends_on: 
+      - vpn
     environment:
       - PUID=${PUID} # default user id, for downloaded files access rights
       - PGID=${PGID} # default group id, for downloaded files access rights
       - TZ=${TZ} # timezone
     volumes:
-      - /volume1/downloads/ongoing:/downloads # download folder
-      - /volume1/docker/htpc-download-box/.config/deluge:/config # config files
+      - ${DOCKERSTORAGEDIR}/torrents:/data/torrents # download folder
+      - ${DOCKERCONFDIR}/deluge:/config # config files
 
   jackett:
     container_name: jackett
     image: linuxserver/jackett:latest
-    #image: sebclem/jackett
     restart: unless-stopped
     network_mode: host # option only available on linux
+    dns:
+      - 8.8.8.8
+      - 4.4.4.4
     environment:
       - PUID=${PUID} # default user id, for downloaded files access rights
       - PGID=${PGID} # default group id, for downloaded files access rights
       - TZ=${TZ} # timezone
     volumes:
-      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
-      - /volume1/downloads/ongoing/torrent-blackhole:/downloads # place where to put .torrent files
-      - /volume1/docker/htpc-download-box/.config/jackett:/config # config files
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERSTORAGEDIR}/torrents/torrent-blackhole:/data/torrents/torrent-blackhole
+      - ${DOCKERCONFDIR}/jackett:/config # config files
 
   flaresolver:
     container_name: flaresolver
-    build: ./CloudProxy
-    ports:
-      - 8191:8191
+    image: flaresolverr/flaresolverr:latest
+    network_mode: host
+    environment:
+      - TZ=${TZ}
+    #volumes:
+      #- ${DOCKERCONFDIR}/flaresolverr/flaresolverr_service.py:/app/flaresolverr_service.py
     restart: unless-stopped
-    #network_mode: host
 
   nzbget:
     container_name: nzbget
@@ -97,8 +101,8 @@ services:
       - PGID=${PGID} # default group id, for downloaded files access rights
       - TZ=${TZ} # timezone
     volumes:
-      - /volume1/downloads/ongoing:/downloads # download folder
-      - /volume1/docker/htpc-download-box/.config/nzbget:/config # config files
+      - ${DOCKERSTORAGEDIR}/usenet:/data/usenet:rw # download folder
+      - ${DOCKERCONFDIR}/nzbget:/config # config files
 
   sonarr:
     container_name: sonarr
@@ -110,10 +114,9 @@ services:
       - PGID=${PGID} # default group id, for downloaded files access rights
       - TZ=${TZ} # timezone
     volumes:
-      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
-      - /volume1/docker/htpc-download-box/.config/sonarr:/config # config files
-      - /volume1/video/tv-show:/tv # tv shows folder
-      - /volume1/downloads/ongoing:/downloads # download folder
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/sonarr:/config # config files
+      - ${DOCKERSTORAGEDIR}:/data # tv shows folder
 
   radarr:
     container_name: radarr
@@ -125,20 +128,37 @@ services:
       - PGID=${PGID} # default group id, for downloaded files access rights
       - TZ=${TZ} # timezone
     volumes:
-      - /volume1/docker/htpc-download-box/etc/localtime:${HOME}/htpc-download-box/etc/localtime:ro
-      - /volume1/docker/htpc-download-box/.config/radarr:/config # config files
-      - /volume1/video/movies:/movies # movies folder
-      - /volume1/downloads/ongoing:/downloads # download folder
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/radarr:/config # config files
+      - ${DOCKERSTORAGEDIR}:/data # movies folder
+
+  bazarr:
+    container_name: bazarr
+    image: lscr.io/linuxserver/bazarr:latest
+    restart: unless-stopped
+    network_mode: host # option only available on linux
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - ${DOCKERCONFDIR}/bazarr:/config
+      - ${DOCKERSTORAGEDIR}/media:/data/media
 
   plex-server:
     container_name: plex-server
     image: plexinc/pms-docker:latest
     restart: unless-stopped
+    #devices:
+      #- /dev/dri/card0:/dev/dri/card0
+      #- /dev/dri/renderD128:/dev/dri/renderD128
     environment:
       - TZ=${TZ} # timezone
     network_mode: host # option only available on linux
     volumes:
-      - /volume1/docker/htpc-download-box/.plex/db:/config # plex database
-      - /volume1/docker/htpc-download-box/.plex/transcode:/transcode # temp transcoded files
-      - /volume1/video:/media # media library
-      - /volume1/photo:/photo
+      - ${DOCKERCONFDIR}/plex/db:/config:rw # plex database
+      - ${DOCKERCONFDIR}/plex/transcode:/transcode # temp transcoded files
+      - ${DOCKERSTORAGEDIR}/media:/data/media:rw # media library
+      - ${DOCKERSTORAGEDIR}/photo:/data/photo:rw
+
